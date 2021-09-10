@@ -434,15 +434,15 @@ namespace System.Text.Json.SourceGeneration
 
             internal static bool IsSyntaxTargetForGeneration(SyntaxNode node) => node is ClassDeclarationSyntax { AttributeLists: { Count: > 0 }, BaseList: { Types : {Count : > 0 } } };
 
-            internal static ClassDeclarationSyntax? GetSemanticTargetForGeneration(GeneratorSyntaxContext context)
+            internal static ClassDeclarationSyntax? GetSemanticTargetForGeneration(SyntaxNode node, SemanticModel semanticModel)
             {
-                var classDeclarationSyntax = (ClassDeclarationSyntax)context.Node;
+                var classDeclarationSyntax = (ClassDeclarationSyntax)node;
 
                 foreach (AttributeListSyntax attributeListSyntax in classDeclarationSyntax.AttributeLists)
                 {
                     foreach (AttributeSyntax attributeSyntax in attributeListSyntax.Attributes)
                     {
-                        IMethodSymbol attributeSymbol = context.SemanticModel.GetSymbolInfo(attributeSyntax).Symbol as IMethodSymbol;
+                        IMethodSymbol attributeSymbol = semanticModel.GetSymbolInfo(attributeSyntax).Symbol as IMethodSymbol;
                         if (attributeSymbol == null)
                         {
                             continue;

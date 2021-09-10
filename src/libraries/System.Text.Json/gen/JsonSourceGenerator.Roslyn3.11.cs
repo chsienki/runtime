@@ -27,8 +27,13 @@ namespace System.Text.Json.SourceGeneration
         /// <param name="context"></param>
         public void Initialize(GeneratorInitializationContext context)
         {
-            context.RegisterForSyntaxNotifications(() => new SyntaxContextReceiver());
+            //  context.RegisterForSyntaxNotifications(() => new SyntaxContextReceiver());
         }
+
+        /// <summary>
+        /// A <see langword="static"/> cache of syntax trees that we generated data for previously.
+        /// </summary>
+        static Dictionary<WeakReference<SyntaxTree>, List<ClassDeclarationSyntax>> s_classesPerTree = new Dictionary<WeakReference<SyntaxTree>, List<ClassDeclarationSyntax>>();
 
         /// <summary>
         /// Generates source code to optimize serialization and deserialization with JsonSerializer.
@@ -42,7 +47,34 @@ namespace System.Text.Json.SourceGeneration
                 Diagnostics.Debugger.Launch();
             }
 #endif
-            if (executionContext.SyntaxContextReceiver is not SyntaxContextReceiver receiver || receiver.ClassDeclarationSyntaxList == null)
+            // re-walk any syntax trees that have been modified
+            Dictionary<WeakReference<SyntaxTree>, List<ClassDeclarationSyntax>> updatedClassesPerTree = new Dictionary<WeakReference<SyntaxTree>, List<ClassDeclarationSyntax>>();
+            foreach (var tree in executionContext.Compilation.SyntaxTrees)
+            {
+                bool usedCache = false;
+                foreach (var key in s_classesPerTree.Keys)
+                {
+                    if (key.TryGetTarget(out var oldTree) && oldTree == tree)
+                    {
+                        updatedClassesPerTree.Add(key, s_classesPerTree[key]);
+                        usedCache = true;
+                        break;
+                    }
+                }
+
+                if (!usedCache)
+                {
+                    // we need to visit this tree
+                    JsonSyntaxWalker rx = new JsonSyntaxWalker(executionContext.Compilation.GetSemanticModel(tree));
+                    rx.Visit(tree.GetRoot());
+
+                    updatedClassesPerTree.Add(new WeakReference<SyntaxTree>(tree), rx.ClassDeclarationSyntaxList);
+                }
+            }
+            s_classesPerTree = updatedClassesPerTree;
+
+            var classDeclarationSyntaxList = s_classesPerTree.Where(kvp => kvp.Value is not null).SelectMany(kvp => kvp.Value).ToList();
+            if (classDeclarationSyntaxList.Count == 0)
             {
                 // nothing to do yet
                 return;
@@ -50,7 +82,7 @@ namespace System.Text.Json.SourceGeneration
 
             JsonSourceGenerationContext context = new JsonSourceGenerationContext(executionContext);
             Parser parser = new(executionContext.Compilation, context);
-            SourceGenerationSpec? spec = parser.GetGenerationSpec(receiver.ClassDeclarationSyntaxList);
+            SourceGenerationSpec? spec = parser.GetGenerationSpec(classDeclarationSyntaxList);
             if (spec != null)
             {
                 _rootTypes = spec.ContextGenerationSpecList[0].RootSerializableTypes;
@@ -60,20 +92,29 @@ namespace System.Text.Json.SourceGeneration
             }
         }
 
-        private sealed class SyntaxContextReceiver : ISyntaxContextReceiver
+        private sealed class JsonSyntaxWalker : SyntaxWalker
         {
+            private readonly SemanticModel _model;
+
             public List<ClassDeclarationSyntax>? ClassDeclarationSyntaxList { get; private set; }
 
-            public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
+            public JsonSyntaxWalker(SemanticModel model)
             {
-                if (Parser.IsSyntaxTargetForGeneration(context.Node))
+                _model = model;
+            }
+
+            public override void Visit(SyntaxNode node)
+            {
+                if (Parser.IsSyntaxTargetForGeneration(node))
                 {
-                    ClassDeclarationSyntax classSyntax = Parser.GetSemanticTargetForGeneration(context);
+                    ClassDeclarationSyntax classSyntax = Parser.GetSemanticTargetForGeneration(node, _model);
                     if (classSyntax != null)
                     {
                         (ClassDeclarationSyntaxList ??= new List<ClassDeclarationSyntax>()).Add(classSyntax);
                     }
                 }
+
+                base.Visit(node);
             }
         }
 
