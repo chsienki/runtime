@@ -1,3 +1,4 @@
+#include <Windows.h>
 #include "version_info.h"
 
 VS_VERSION_INFO VERSIONINFO
@@ -37,4 +38,3 @@ BEGIN
 
     END
 END
-

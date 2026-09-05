@@ -19,8 +19,7 @@
     <CopyWasmNativeFilesDependsOn Condition="'$(TargetOS)' == 'windows'">BuildCoreHostOnWindows</CopyWasmNativeFilesDependsOn>
     <CopyWasmNativeFilesDependsOn Condition="'$(TargetOS)' != 'windows'">BuildCoreHostOnUnix</CopyWasmNativeFilesDependsOn>
     <IntermediateOutputRootPath>$(ArtifactsObjDir)$(TargetRid).$(Configuration)\</IntermediateOutputRootPath>
-    <!-- Global location for version files -->
-    <NativeVersionFile Condition="$([MSBuild]::IsOsPlatform(Windows))">$(ArtifactsObjDir)_version.h</NativeVersionFile>
+    <NativeVersionFile Condition="$([MSBuild]::IsOsPlatform(Windows)) and '$(NativeVersionFile)' == ''">$(IntermediateOutputRootPath)native-version\_version.h</NativeVersionFile>
     <NativeVersionFile Condition="!$([MSBuild]::IsOsPlatform(Windows)) or '$(TargetsMobile)' == 'true'">$(ArtifactsObjDir)_version.c</NativeVersionFile>
   </PropertyGroup>
 
@@ -171,6 +170,7 @@
       <BuildArgs Condition="'$(Ninja)' == 'false'">$(BuildArgs) msbuild</BuildArgs>
       <BuildArgs>$(BuildArgs) runtimeflavor $(RuntimeFlavor)</BuildArgs>
       <BuildArgs>$(BuildArgs) runtimeconfiguration $(RuntimeConfiguration)</BuildArgs>
+      <BuildArgs Condition="'$(TargetOS)' == 'windows'">$(BuildArgs) -cmakeargs "-DVERSION_HEADER_PATH=$(NativeVersionFile.Replace('\', '/'))"</BuildArgs>
       <BuildArgs Condition="'$(EnableNativeSanitizers)' != ''">$(BuildArgs) -fsanitize=$(EnableNativeSanitizers)</BuildArgs>
       <BuildArgs>$(BuildArgs) -cmakeargs "-DCLR_CMAKE_BUILD_HOST_TESTS=$(BuildNativeHostTests.ToUpper())"</BuildArgs>
       <BuildArgs>$(BuildArgs) -cmakeargs "-DCLR_CMAKE_BUILD_HOST_PRODUCT=$(BuildNativeHostProduct.ToUpper())"</BuildArgs>
@@ -235,20 +235,6 @@
     <Copy SourceFiles="@(_MicrosoftNetCoreAppRuntimePackNativeDirFiles)"
           DestinationFolder="$(MicrosoftNetCoreAppRuntimePackNativeDir)"
           SkipUnchangedFiles="true" />
-  </Target>
-
-  <Target Name="PrependWindowsHeaderIncludeToVersionHeaderFile"
-          Condition="'$(TargetOS)' == 'windows'"
-          AfterTargets="GenerateNativeVersionFile">
-    <PropertyGroup>
-      <IncludeStatementLine>#include &lt;Windows.h&gt;</IncludeStatementLine>
-      <NativeVersionFileContents>$([System.IO.File]::ReadAllText('$(NativeVersionFile)'))</NativeVersionFileContents>
-    </PropertyGroup>
-
-    <WriteLinesToFile
-      File="$(NativeVersionFile)"
-      Lines="$(IncludeStatementLine);$(NativeVersionFileContents)"
-      Overwrite="true" />
   </Target>
 
   <Import Project="$(RepositoryEngineeringDir)nativeSanitizers.targets" />

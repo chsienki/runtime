@@ -1,7 +1,7 @@
 <Project>
   <Import Project="Sdk.props" Sdk="Microsoft.Build.NoTargets" />
   <PropertyGroup>
-    <NativeVersionFile Condition="$([MSBuild]::IsOsPlatform(Windows))">$(ArtifactsObjDir)_version.h</NativeVersionFile>
+    <NativeVersionFile Condition="$([MSBuild]::IsOsPlatform(Windows))">$(ArtifactsObjDir)native-version\coreclr\$(TargetOS).$(TargetArchitecture).$(Configuration)\_version.h</NativeVersionFile>
     <NativeVersionFile Condition="!$([MSBuild]::IsOsPlatform(Windows)) or '$(TargetsMobile)' == 'true'">$(ArtifactsObjDir)_version.c</NativeVersionFile>
     <RuntimeVersionFile>$(ArtifactsObjDir)runtime_version.h</RuntimeVersionFile>
     <NativeSourceLinkFile>$(ArtifactsObjDir)native.sourcelink.json</NativeSourceLinkFile>
