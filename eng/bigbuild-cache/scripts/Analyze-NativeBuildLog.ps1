@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-  Extracts per-component CMake and Ninja work counts from a Runtime build log.
+  Extracts per-invocation CMake and Ninja work counts from a Runtime build log.
 
 .DESCRIPTION
-  Tracks CoreCLR, native-library, and CoreHost subprocesses from the repository
-  build output. It records whether CMake configured or skipped and classifies
-  Ninja progress entries as compile, link, generate, install, or other work.
+  Tracks each CoreCLR, native-library, and CoreHost subprocess from the
+  repository build output. It records the target, intermediate directory,
+  CMake timing, and classifies Ninja progress entries as compile, link,
+  generate, install, or other work.
 #>
 param(
     [Parameter(Mandatory)]
@@ -18,65 +19,108 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $BuildLog = (Resolve-Path $BuildLog).Path
-$components = [ordered]@{}
-$currentComponent = 'other'
+$invocations = [System.Collections.Generic.List[object]]::new()
+$currentInvocation = $null
+$componentInvocationCounts = @{}
 
-function Get-Component([string]$name)
+function Start-Invocation([string]$component, [string]$commandLine)
 {
-    if (-not $components.Contains($name))
+    if (-not $componentInvocationCounts.ContainsKey($component))
     {
-        $components[$name] = [ordered]@{
-            name = $name
-            invocations = 0
-            cmakeConfigured = 0
-            cmakeSkipped = 0
-            reportedEdges = 0
-            progressRecords = 0
-            compile = 0
-            link = 0
-            generate = 0
-            install = 0
-            other = 0
-        }
+        $componentInvocationCounts[$component] = 0
     }
 
-    return $components[$name]
+    $componentInvocationCounts[$component]++
+    $invocation = [ordered]@{
+        index = $invocations.Count + 1
+        component = $component
+        componentInvocation = $componentInvocationCounts[$component]
+        target = if ($commandLine -match '(?:^|\s)-component\s+([^\s"]+)') { $matches[1] } else { 'install' }
+        intermediateDirectory = $null
+        cmakeState = 'unknown'
+        cmakeConfigureSeconds = 0.0
+        cmakeGenerateSeconds = 0.0
+        cmakeSeconds = 0.0
+        reportedEdges = 0
+        progressRecords = 0
+        compile = 0
+        link = 0
+        generate = 0
+        install = 0
+        other = 0
+    }
+
+    $invocations.Add($invocation)
+    return $invocation
 }
 
 foreach ($line in Get-Content -LiteralPath $BuildLog)
 {
-    if ($line -match 'build-runtime\.(cmd|sh)')
+    if ($line -match '^\s*Executing "[^"]*build-runtime\.(cmd|sh)"\s')
     {
-        $currentComponent = 'coreclr'
-        (Get-Component $currentComponent).invocations++
+        $currentInvocation = Start-Invocation 'coreclr' $line
         continue
     }
 
-    if ($line -match '[\\/]native[\\/]libs[\\/]build-native\.(cmd|sh)')
+    if ($line -match '^\s*"[^"]*[\\/]native[\\/]libs[\\/]build-native\.(cmd|sh)"\s')
     {
-        $currentComponent = 'libraries-native'
-        (Get-Component $currentComponent).invocations++
+        $currentInvocation = Start-Invocation 'libraries-native' $line
         continue
     }
 
-    if ($line -match '[\\/]native[\\/]corehost[\\/]build\.(cmd|sh)')
+    if ($line -match '^\s*"[^"]*[\\/]native[\\/]corehost[\\/]build\.(cmd|sh)"\s')
     {
-        $currentComponent = 'corehost'
-        (Get-Component $currentComponent).invocations++
+        $currentInvocation = Start-Invocation 'corehost' $line
         continue
+    }
+
+    if ($null -eq $currentInvocation)
+    {
+        continue
+    }
+
+    if ($line -match 'Commencing build of "(.+?)" target in ".+?" for .+ in (.+)$')
+    {
+        $currentInvocation.target = $matches[1].Trim()
+        $currentInvocation.intermediateDirectory = $matches[2].Trim()
+        continue
+    }
+
+    if ($line -match 'gen-buildsys\.(?:cmd|sh)"?\s+"[^"]+"\s+"([^"]+)"')
+    {
+        $currentInvocation.intermediateDirectory = $matches[1]
+    }
+
+    if ($line -match '-- Build files have been written to:\s*(.+)$')
+    {
+        $currentInvocation.intermediateDirectory = $matches[1].Trim()
     }
 
     if ($line.Contains('The CMake command line is the same as the last run.'))
     {
-        $component = Get-Component $currentComponent
-        $component.cmakeSkipped++
+        $currentInvocation.cmakeState = 'skipped'
         continue
     }
 
     if ($line.Contains('Running CMake again.') -or $line.Contains('Re-running CMake'))
     {
-        $component = Get-Component $currentComponent
-        $component.cmakeConfigured++
+        $currentInvocation.cmakeState = 'configured'
+    }
+
+    if ($line -match '-- Configuring done \(([\d.]+)s\)')
+    {
+        $currentInvocation.cmakeState = 'configured'
+        $currentInvocation.cmakeConfigureSeconds += [double]$matches[1]
+        $currentInvocation.cmakeSeconds = $currentInvocation.cmakeConfigureSeconds + $currentInvocation.cmakeGenerateSeconds
+        continue
+    }
+
+    if ($line -match '-- Generating done \(([\d.]+)s\)')
+    {
+        $currentInvocation.cmakeState = 'configured'
+        $currentInvocation.cmakeGenerateSeconds += [double]$matches[1]
+        $currentInvocation.cmakeSeconds = $currentInvocation.cmakeConfigureSeconds + $currentInvocation.cmakeGenerateSeconds
+        continue
     }
 
     if ($line -notmatch '\[(\d+)/(\d+)\]\s+(.*)$')
@@ -84,38 +128,37 @@ foreach ($line in Get-Content -LiteralPath $BuildLog)
         continue
     }
 
-    $component = Get-Component $currentComponent
     $total = [int]$matches[2]
     $description = $matches[3]
-    $component.reportedEdges = [Math]::Max($component.reportedEdges, $total)
-    $component.progressRecords++
+    $currentInvocation.reportedEdges = [Math]::Max($currentInvocation.reportedEdges, $total)
+    $currentInvocation.progressRecords++
 
     if ($description -match '^Building .+ object ')
     {
-        $component.compile++
+        $currentInvocation.compile++
     }
     elseif ($description -match '^Linking ')
     {
-        $component.link++
+        $currentInvocation.link++
     }
     elseif ($description -match '^(Generating|Preprocessing) ')
     {
-        $component.generate++
+        $currentInvocation.generate++
     }
     elseif ($description -match '^Install the project')
     {
-        $component.install++
+        $currentInvocation.install++
     }
     else
     {
-        $component.other++
+        $currentInvocation.other++
     }
 }
 
-$componentResults = @($components.Values | ForEach-Object { [pscustomobject]$_ })
+$invocationResults = @($invocations | ForEach-Object { [pscustomobject]$_ })
 $result = [ordered]@{
     buildLog = $BuildLog
-    components = $componentResults
+    invocations = $invocationResults
 }
 
 $parent = Split-Path -Parent $OutputPath
@@ -125,4 +168,4 @@ if ($parent)
 }
 
 $result | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $OutputPath -Encoding ascii
-$componentResults | Format-Table name, invocations, cmakeConfigured, cmakeSkipped, reportedEdges, compile, link, generate, install, other
+$invocationResults | Format-Table index, component, componentInvocation, target, cmakeState, cmakeSeconds, reportedEdges, compile, link, generate, install, other
