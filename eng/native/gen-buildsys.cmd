@@ -34,8 +34,8 @@ call "%EMSDK_PATH%\emsdk_env.cmd"
 
 setlocal enabledelayedexpansion
 
-set __SourceDir=%1
-set __IntermediatesDir=%2
+set "__SourceDir=%~1"
+set "__IntermediatesDir=%~2"
 set __VSVersion=%3
 set __Arch=%4
 set __CmakeGenerator=Visual Studio
@@ -119,15 +119,16 @@ goto loop
 set __ExtraCmakeParams="-DCMAKE_INSTALL_PREFIX=%__CMakeBinDir%" "-DCLR_CMAKE_HOST_ARCH=%__Arch%" %__ExtraCmakeParams%
 
 set __CmdLineOptionsUpToDateFile=%__IntermediatesDir%\cmake_cmd_line.txt
-set __CMakeCmdLineCache=
+set __CurrentCmdLineOptionsFile=%__IntermediatesDir%\cmake_cmd_line.current.txt
+echo %__ExtraCmakeParams% > "%__CurrentCmdLineOptionsFile%"
 if not "%__ConfigureOnly%" == "1" (
     REM MSBuild can't reload from a CMake reconfigure during build correctly, so only do this
     REM command-line up to date check for non-VS generators.
     if "%__CmakeGenerator:Visual Studio=%" == "%__CmakeGenerator%" (
         if exist "%__CmdLineOptionsUpToDateFile%" (
-            set /p __CMakeCmdLineCache=<"%__CmdLineOptionsUpToDateFile%"
-            REM Strip the extra space from the end of the cached command line
-            if "!__ExtraCmakeParams!" == "!__CMakeCmdLineCache:~0,-1!" (
+            fc /b "%__CurrentCmdLineOptionsFile%" "%__CmdLineOptionsUpToDateFile%" >nul
+            if not errorlevel 1 (
+                del "%__CurrentCmdLineOptionsFile%"
                 echo The CMake command line is the same as the last run. Skipping running CMake.
                 exit /B 0
             ) else (
@@ -137,11 +138,11 @@ if not "%__ConfigureOnly%" == "1" (
     )
 )
 
-echo %CMakeToolPrefix% "%CMakePath% %__ExtraCmakeParams% --no-warn-unused-cli -G %__CmakeGenerator% -B %__IntermediatesDir% -S %__SourceDir%"
-%CMakeToolPrefix% "%CMakePath%" %__ExtraCmakeParams% --no-warn-unused-cli -G "%__CmakeGenerator%" -B %__IntermediatesDir% -S %__SourceDir%
+echo %CMakeToolPrefix% "%CMakePath% %__ExtraCmakeParams% --no-warn-unused-cli -G %__CmakeGenerator% -B "%__IntermediatesDir%" -S "%__SourceDir%""
+%CMakeToolPrefix% "%CMakePath%" %__ExtraCmakeParams% --no-warn-unused-cli -G "%__CmakeGenerator%" -B "%__IntermediatesDir%" -S "%__SourceDir%"
 
 if "%errorlevel%" == "0" (
-    echo %__ExtraCmakeParams% > %__CmdLineOptionsUpToDateFile%
+    move /Y "%__CurrentCmdLineOptionsFile%" "%__CmdLineOptionsUpToDateFile%" >nul
 )
 
 endlocal
