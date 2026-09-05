@@ -129,8 +129,8 @@ if(CLR_CMAKE_HOST_WIN32)
     # include paths
     include_directories(${CLR_SRC_NATIVE_DIR}/external/libunwind/include/tdep)
     include_directories(${CLR_SRC_NATIVE_DIR}/external/libunwind/include)
-    include_directories(${CLR_ARTIFACTS_OBJ_DIR}/external/libunwind/include/tdep)
-    include_directories(${CLR_ARTIFACTS_OBJ_DIR}/external/libunwind/include)
+    include_directories(${CLR_LIBUNWIND_BINARY_DIR}/include/tdep)
+    include_directories(${CLR_LIBUNWIND_BINARY_DIR}/include)
 
     # files for cross os compilation
     include_directories(${CLR_SRC_NATIVE_DIR}/external/libunwind/include/remote)

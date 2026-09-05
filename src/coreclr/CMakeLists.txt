@@ -135,7 +135,7 @@ if(CLR_CMAKE_HOST_UNIX)
     add_subdirectory(pal)
 else()
     if(CLR_CMAKE_TARGET_UNIX AND NOT CLR_CMAKE_TARGET_ARCH_WASM)
-        add_subdirectory(${CLR_SRC_NATIVE_DIR}/external/libunwind_extras ${CLR_ARTIFACTS_OBJ_DIR}/external/libunwind)
+        add_subdirectory(${CLR_SRC_NATIVE_DIR}/external/libunwind_extras ${CLR_LIBUNWIND_BINARY_DIR})
     endif()
 endif()
 

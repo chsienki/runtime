@@ -13,14 +13,14 @@ endif()
 if(NOT CLR_CMAKE_USE_SYSTEM_LIBUNWIND AND NOT CLR_CMAKE_HOST_ARCH_WASM)
   include_directories(${CLR_SRC_NATIVE_DIR}/external/libunwind/include)
   include_directories(${CLR_SRC_NATIVE_DIR}/external/libunwind/include/tdep)
-  include_directories(${CLR_ARTIFACTS_OBJ_DIR}/external/libunwind/include)
-  include_directories(${CLR_ARTIFACTS_OBJ_DIR}/external/libunwind/include/tdep)
+  include_directories(${CLR_LIBUNWIND_BINARY_DIR}/include)
+  include_directories(${CLR_LIBUNWIND_BINARY_DIR}/include/tdep)
 
-  add_subdirectory(${CLR_SRC_NATIVE_DIR}/external/libunwind_extras ${CLR_ARTIFACTS_OBJ_DIR}/external/libunwind)
+  add_subdirectory(${CLR_SRC_NATIVE_DIR}/external/libunwind_extras ${CLR_LIBUNWIND_BINARY_DIR})
 elseif(NOT CLR_CMAKE_TARGET_APPLE AND NOT CLR_CMAKE_HOST_ARCH_WASM)
   find_unwind_libs(UNWIND_LIBS)
 elseif(CLR_CMAKE_TARGET_APPLE)
-  add_subdirectory(${CLR_SRC_NATIVE_DIR}/external/libunwind_extras ${CLR_ARTIFACTS_OBJ_DIR}/external/libunwind)
+  add_subdirectory(${CLR_SRC_NATIVE_DIR}/external/libunwind_extras ${CLR_LIBUNWIND_BINARY_DIR})
 endif(NOT CLR_CMAKE_USE_SYSTEM_LIBUNWIND AND NOT CLR_CMAKE_HOST_ARCH_WASM)
 
 include(configure.cmake)
@@ -248,8 +248,8 @@ if(CLR_CMAKE_TARGET_APPLE)
   target_include_directories(coreclrpal_dac PUBLIC
     ${CLR_SRC_NATIVE_DIR}/external/libunwind/include
     ${CLR_SRC_NATIVE_DIR}/external/libunwind/include/tdep
-    ${CLR_ARTIFACTS_OBJ_DIR}/external/libunwind/include
-    ${CLR_ARTIFACTS_OBJ_DIR}/external/libunwind/include/tdep
+    ${CLR_LIBUNWIND_BINARY_DIR}/include
+    ${CLR_LIBUNWIND_BINARY_DIR}/include/tdep
   )
 
   target_compile_definitions(coreclrpal_dac PUBLIC -DUNW_REMOTE_ONLY)
