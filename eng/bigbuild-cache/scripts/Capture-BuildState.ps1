@@ -19,7 +19,10 @@ param(
 
     [string]$ArchiveName = 'build-state.tar',
 
-    [int]$Throttle = 16
+    [int]$Throttle = 16,
+
+    # Replays must pass this value as SourceRevisionId during the cacheable build.
+    [string]$SourceRevisionId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,6 +48,10 @@ if ($LASTEXITCODE -ne 0)
     throw "git rev-parse failed ($LASTEXITCODE)."
 }
 $sha = $shaOutput.Trim()
+if (-not $SourceRevisionId)
+{
+    $SourceRevisionId = $sha
+}
 
 $relativeArchiveRoots = [System.Collections.Generic.List[string]]::new()
 $expandedFiles = 0
@@ -190,6 +197,7 @@ else
 $metadata = [ordered]@{
     schemaVersion = 1
     sha = $sha
+    sourceRevisionId = $SourceRevisionId
     repoRoot = $RepoRoot
     archiveFile = $ArchiveName
     archiveSha256 = $archiveHash

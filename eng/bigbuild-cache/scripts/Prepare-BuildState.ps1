@@ -188,6 +188,7 @@ $headShaOutput = Invoke-Git @('-C', $RepoRoot, 'rev-parse', 'HEAD')
 
 $metrics = [ordered]@{
     baselineSha = $metadata.sha
+    sourceRevisionId = if ($metadata.sourceRevisionId) { $metadata.sourceRevisionId } else { $metadata.sha }
     headSha = $headShaOutput.Trim()
     unchanged = $unchangedPaths.Count
     changed = $changedPaths.Count
@@ -210,4 +211,4 @@ if ($MetricsPath)
 }
 
 $global:LASTEXITCODE = 0
-Write-Host "[prepare] unchanged=$($metrics.unchanged) changed=$($metrics.changed) changedMissing=$changedMissing untracked=$($metrics.untracked) seconds=$($metrics.elapsedSeconds)"
+Write-Host "[prepare] sourceRevisionId=$($metrics.sourceRevisionId) unchanged=$($metrics.unchanged) changed=$($metrics.changed) changedMissing=$changedMissing untracked=$($metrics.untracked) seconds=$($metrics.elapsedSeconds)"
