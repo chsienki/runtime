@@ -18,6 +18,15 @@ add_library_clr(clretwrc SHARED
     clretwrc.rc
 )
 
+# The resource-only linker does not create CMake's declared import library and
+# preserves a DLL timestamp that can remain older than the .res input.
+add_custom_command(
+    TARGET clretwrc
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E touch $<TARGET_FILE:clretwrc>
+    COMMAND ${CMAKE_COMMAND} -E touch $<TARGET_LINKER_FILE:clretwrc>
+)
+
 # add the install targets
 install_clr(TARGETS clretwrc DESTINATIONS . sharedFramework COMPONENT runtime)
 

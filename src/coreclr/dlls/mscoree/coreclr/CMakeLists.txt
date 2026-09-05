@@ -237,21 +237,37 @@ if(CLR_CMAKE_TARGET_WIN32)
         set(CLRDEBUGINFO_RESOURCE_NAME CLRDEBUGINFOWINDOWSARM64)
     endif(CLR_CMAKE_TARGET_ARCH_AMD64)
 
-    add_custom_target(
-        clr_debug_resources
-        DEPENDS mscordaccore mscordbi
-        # make CLRDEBUGINFO resource
+    add_custom_command(
+        OUTPUT ${CLRDEBUGINFO_RESOURCE_PATH}
         COMMAND powershell -NoProfile -ExecutionPolicy ByPass -File "${CMAKE_CURRENT_SOURCE_DIR}/GenClrDebugResource.ps1" -dac $<TARGET_FILE:mscordaccore> -dbi $<TARGET_FILE:mscordbi> -out ${CLRDEBUGINFO_RESOURCE_PATH}
+        DEPENDS mscordaccore mscordbi
     )
+
+    add_custom_target(clr_debug_resources DEPENDS ${CLRDEBUGINFO_RESOURCE_PATH})
 
     configure_file(dump_helper_resource.rc.in ${CMAKE_CURRENT_BINARY_DIR}/dump_helper_resource.rc)
 
     set(EMBEDDED_MINIDUMP_AUXILIARY_PROVIDER $<TARGET_FILE:mscordaccore>)
     configure_file(dump_helper_resource.rc.in ${CMAKE_CURRENT_BINARY_DIR}/dump_helper_resource_embedded_minidump_provider.rc.gen)
-    file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/dump_helper_resource_embedded_minidump_provider.rc INPUT ${CMAKE_CURRENT_BINARY_DIR}/dump_helper_resource_embedded_minidump_provider.rc.gen)
+    set(GENERATED_EMBEDDED_DUMP_HELPER_RESOURCE ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/dump_helper_resource_embedded_minidump_provider.rc.generated)
+    set(EMBEDDED_DUMP_HELPER_RESOURCE ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/dump_helper_resource_embedded_minidump_provider.rc)
+    file(GENERATE OUTPUT ${GENERATED_EMBEDDED_DUMP_HELPER_RESOURCE} INPUT ${CMAKE_CURRENT_BINARY_DIR}/dump_helper_resource_embedded_minidump_provider.rc.gen)
+    add_custom_command(
+        OUTPUT ${EMBEDDED_DUMP_HELPER_RESOURCE}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${GENERATED_EMBEDDED_DUMP_HELPER_RESOURCE} ${EMBEDDED_DUMP_HELPER_RESOURCE}
+        COMMAND ${CMAKE_COMMAND} -E touch ${EMBEDDED_DUMP_HELPER_RESOURCE}
+        DEPENDS ${GENERATED_EMBEDDED_DUMP_HELPER_RESOURCE} ${CLRDEBUGINFO_RESOURCE_PATH}
+    )
+
+    set_source_files_properties(
+        ${CMAKE_CURRENT_BINARY_DIR}/dump_helper_resource.rc
+        TARGET_DIRECTORY coreclr
+        PROPERTIES OBJECT_DEPENDS ${CLRDEBUGINFO_RESOURCE_PATH}
+    )
 
     target_sources(coreclr PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/dump_helper_resource.rc)
-    target_sources(coreclr_static PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/dump_helper_resource_embedded_minidump_provider.rc)
+    target_sources(coreclr_static PUBLIC ${EMBEDDED_DUMP_HELPER_RESOURCE})
 
     add_dependencies(coreclr clr_debug_resources)
     add_dependencies(coreclr_static clr_debug_resources mscordaccore)
